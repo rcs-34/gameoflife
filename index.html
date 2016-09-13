@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Conway's Game of Life</title>
+<style>
+body{font-size:12px;font-family:sans-serif;background:#eee;color:#334;padding:0;margin:0;}
+td{text-align:left;vertical-align: top;border:1px solid #444;}
+canvas{background: #000;padding:0;margin:0;cursor:pointer;}
+tr.trr{cursor:pointer;}
+tr.trr:hover{background: #999;}
+tr.selected{background: #000; color:#55f;}
+button{font-size:20px;color:#555;width:100px;height:100px;border-radius:10px;border:1px solid #eee;background:#000;outline:none;}
+button:hover{color:#05f;}
+button:active{font-size:18px;border:3px solid #eee}
+pre{font-weight:bold;}
+pre:hover{background: #000; cursor:pointer;color:#55f;}
+table{border-collapse:collapse;}
+button,pre,canvas,tr.trr{transition:background 1s, border-radius 1s, color 1s;}
+a:link {color:#aaf;}
+a:visited {color:#aaf;}
+h1{font-weight:100; font-size: 300%;margin:0px;}
+h2{font-weight:100;margin-top:2em;margin-bottom:0.3em;background:linear-gradient(-90deg,#eee,#888);}
+</style>
+<script language="javascript" type="text/javascript">
+var cvs;
+var cx;
+var g=0;
+var gt=100;
+var running=false;
+var a0;
+var a1;
+var ph=0;
+var size;
+var cellSize=20;
+var nc=new Array(3);
+var nr=new Array(3);
+var bs=[3];
+var ss=[2,3];
+var cPlay;
+var cStep;
+var cClear;
+var row;
+function array(_w,_h){
+var array=new Array(_w);
+for(var i=0;i<_w;i++){
+array[i]=new Array(_h);
+}
+return array;
+}
+function tag(_name,_target){
+var element=document.createElement(_name);
+_target.appendChild(element);
+return element;
+}
+function goBabe(){
+document.getElementById("noteR").innerHTML="<i>Click on row to set the rule active in the simulator.</i>"
+document.getElementById("noteP").innerHTML="<i>Click on any pattern to load it into the simulator.</i>"
+onResize();
+var ps=["p1","p2","p3","p4","p5","p6","p7"];
+for(p in ps){
+present(ps[p]);
+}
+setInterval(function(){
+grid(cvs,cx,cellSize);
+if(running){
+update();
+ph++;
+if(ph>1){
+ph=0;
+}
+}
+cx.fillStyle="#00F";
+for(var c=0;c<size;c++){
+for(var r=0;r<size;r++){
+if(a0[c][r]){
+cx.fillRect(c*cellSize,r*cellSize,cellSize,cellSize);
+}
+}
+}
+},gt);
+}
+function grid(_cvs,_cx,_cellSize){
+_cx.clearRect(0,0,_cvs.width,_cvs.height);
+_cx.lineWidth=1;
+_cx.strokeStyle="#333";
+for(var c=0;c<_cvs.width;c+=_cellSize){
+_cx.beginPath();
+_cx.moveTo(c,0);
+_cx.lineTo(c,_cvs.height);
+_cx.stroke();
+}
+for(var r=0;r<_cvs.height;r+=_cellSize){
+_cx.beginPath();
+_cx.moveTo(0,r);
+_cx.lineTo(_cvs.width,r);
+_cx.stroke();
+}
+}
+function loadR(_row){
+if(row){
+row.setAttribute("class","trr");
+}
+row=_row;
+var rule=_row.children[0].innerHTML;
+var ruleA=rule.split("/");
+var b=ruleA[0].substring(1);
+var s=ruleA[1].substring(1);
+bs=[];
+ss=[];
+for(var i=0;i<b.length;i++){
+bs[i]=b[i]*1;
+}
+for(var i=0;i<s.length;i++){
+ss[i]=s[i]*1;
+}
+row.setAttribute("class","selected");
+}
+function Pattern(_def){
+this.data=new Array(0);
+var text=_def.innerHTML;
+this.lines=text.split("\n");
+this.maxX=0;
+for(var li=0;li<this.lines.length;li++){
+var line=this.lines[li];
+for(var ci=0;ci<line.length;ci++){
+if(line[ci]==='X'){
+this.data[this.data.length]=[ci,li];
+this.maxX=Math.max(this.maxX,ci);
+}
+}
+}
+}
+function present(_patt){
+var cs=cellSize/2;
+var patt=document.getElementById(_patt);
+var parent=patt.parentElement;
+var pattern=new Pattern(patt);
+parent.innerHTML="";
+var canvas=tag("canvas",parent);
+canvas.onclick=function(){
+loadP(patt);
+}
+canvas.onmouseenter=function(){
+this.style.background="#fff";
+}
+canvas.onmouseout=function(){
+this.style.background="#000";
+}
+canvas.width=(2+pattern.maxX)*cs;
+canvas.height=(pattern.lines.length)*cs;
+var context=canvas.getContext("2d");
+context.translate(0.5,0.5);
+grid(canvas,context,cs);
+context.fillStyle="#00F";
+for(var i in pattern.data){
+var cr=pattern.data[i];
+context.fillRect(cr[0]*cs,cr[1]*cs,cs,cs);
+}
+}
+function loadP(_def){
+stop();
+a0=array(size,size);
+a1=array(size,size);
+if(_def!==null){
+var patt=new Pattern(_def);
+var o=Math.round(size/2)-1;
+for(var i=0;i<patt.data.length;i++){
+var c=patt.data[i];
+var x=(o+c[0])-Math.round(patt.maxX/2);
+var y=(o+c[1])-Math.round(patt.lines.length/2);
+a0[x][y]=true;
+}
+}
+}
+function update(){
+for(var c=0;c<size;c++){
+nc[0]=(c-1>=0)?c-1:size-1;
+nc[1]=c;
+nc[2]=(c+1<size)?c+1:0;
+for(var r=0;r<size;r++){
+var live=a0[c][r];
+nr[0]=(r-1>=0)?r-1:size-1;
+nr[1]=r;
+nr[2]=(r+1<size)?r+1:0;
+var sum=0;
+for(var nci=0;nci<3&&sum<5;nci++){
+for(var nri=0;nri<3&&sum<5;nri++){
+if(nci!==1||nri!==1){
+if(a0[nc[nci]][nr[nri]]){
+sum++;
+}
+}
+}
+}
+a1[c][r]=false;
+if(live){
+for(var s in ss){
+if(sum===ss[s]){
+a1[c][r]=true;
+break;
+}
+}
+}else{
+for(var b in bs){
+if(sum===bs[b]){
+a1[c][r]=true;
+break;
+}
+}
+}
+}
+}
+var tmp=a0;
+a0=a1;
+a1=tmp;
+}
+function Ctrl(_name,_onclick){
+var button=document.createElement("button");
+button.innerHTML=_name;
+button.onclick=_onclick;
+return button;
+}
+function stop(){
+running=false;
+cPlay.innerHTML="PLAY";
+}
+function onResize(){
+var ww=window.innerWidth;
+var wh=window.innerHeight;
+var slot=c=document.getElementById("game");
+slot.innerHTML="";
+tag("h2",slot).innerHTML="Simulation";
+tag("div",slot).innerHTML="<i>Click to the simulation area to affect the simulation.</i>";
+cPlay=new Ctrl("PLAY",function(){
+if(running){
+stop();
+}else{
+running=true;
+this.innerHTML="STOP";
+}
+});
+cStep=new Ctrl("STEP",function(){
+update();
+});
+cClear=new Ctrl("CLEAR",function(){
+loadP(null);
+});
+var table=tag("table",slot);
+var rowc=tag("tr",table);
+var tdc=tag("td",rowc);
+cvs=tag("canvas",tdc);
+if(ww>wh){
+var td=tag("td",rowc);
+td.appendChild(cPlay);
+tag("br",td);
+td.appendChild(cStep);
+tag("br",td);
+td.appendChild(cClear);
+}else{
+var row=tag("tr",table);
+var td=tag("td",row);
+td.appendChild(cPlay);
+td.appendChild(cStep);
+td.appendChild(cClear);
+}
+cvs.width=cvs.height=Math.min(ww,wh);
+cvs.onclick=function(_e){
+var c=Math.floor(_e.offsetX/cellSize);
+var r=Math.floor(_e.offsetY/cellSize);
+a0[c][r]=!a0[c][r];
+};
+cx=cvs.getContext("2d");
+cx.translate(0.5,0.5);
+size=Math.round(cvs.width/cellSize);
+loadR(document.getElementById("r0"));
+loadP(null);
+}
+</script>
+</head>
+<body onLoad="goBabe()"  onResize="onResize()">
+<h1>Life-like cellular automaton</h1>
+<p>This class of cellular automata is named for the Game of Life (B3/S23), the most famous cellular automaton, which meets all of Life-like cellular automaton criteria. It is common to refer to it as the "Life family" or to simply use phrases like "similar to Life".</p>
+<p>You can find more on <a href="https://en.wikipedia.org/wiki/Life-like_cellular_automaton">WikiPedia</a></p>
+<h2>A selection of Life-like rules</h2>
+<div id="noteR"></div>
+<table>
+<tr><td>Rule</td><td>Name</td><td>Description</td></tr>
+<tr class="trr" id="r0" onclick="loadR(this)"><td>B3/S23</td><td>Life</td><td>Highly complex behavior.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B36/S23</td><td>HighLife</td><td>Similar to Life but with a small self-replicating pattern.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B34/S34</td><td>34 Life</td><td>Was thought to be a stable alternative to Life, until computer simulation found that larger patterns tend to explode. </td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B1357/S1357</td><td>Replicator</td><td>Edward Fredkin's replicating automaton: every pattern is eventually replaced by multiple copies of itself.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B2/S</td><td>Seeds</td><td>Every live cell immediately dies, and many patterns lead to explosive chaotic growth.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B25/S4</td><td> </td><td>This rule supports a small self-replicating pattern which, when combined with a small glider pattern, causes the glider to bounce back and forth in a pseudorandom walk.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B3/S012345678</td><td>Life without Death</td><td>Also known as Inkspot or Flakes. Cells that become alive never die. Can be used to simulate arbitrary Boolean circuits.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B35678/S5678</td><td>Diamoeba</td><td>Forms large diamonds with chaotically fluctuating boundaries. </td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B36/S125</td><td>2x2</td><td>If a pattern is composed of 2x2 blocks, it will continue to evolve in the same form.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B3678/S34678</td><td>Day & Night</td><td>Symmetric under on-off reversal. Has engineered patterns with highly complex behavior.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B368/S245</td><td>Morley</td><td>Named after Stephen Morley; also called Move. Supports very high-period and slow spaceships.</td></tr>
+<tr class="trr" onclick="loadR(this)"><td>B4678/S35678</td><td>Anneal</td><td>Also called the twisted majority rule. Approximates the curve-shortening flow on the boundaries between live and dead cells.</td></tr>
+</table>
+<h2>Basic patterns</h2>
+<div id="noteP"></div>
+<table>
+<tr><td colspan="2">Still lifes</td><td colspan="2">Oscilators</td><td colspan="2">Spaceships</td></tr>
+<tr>
+<tr><td>Block</td><td>Loaf</td><td>Blinker</td><td>Pentadecathlon</td><td>Glider</td><td>Lightweight spaceship</td></tr>
+<tr>
+<td><pre id="p1" onclick="loadP(this)">
+
+
+ XX
+ XX      
+
+</pre></td>
+<td><pre  id="p2" onclick="loadP(this)">
+
+  XX
+ X  X
+  X X
+   X      
+</pre></td>
+<td><pre id="p3"  onclick="loadP(this)">
+
+
+ XXX XXX  
+
+
+</pre></td>
+<td><pre id="p4"  onclick="loadP(this)">
+
+ XXXXXXXX 
+ X XXXX X 
+ XXXXXXXX 
+
+</pre></td>
+<td><pre id="p5"  onclick="loadP(this)">
+
+  X
+   X
+ XXX     
+
+</pre></td>
+<td><pre id="p6"  onclick="loadP(this)">
+
+  XX
+ XXXX
+ XX XX    
+   XX
+</pre></td>
+</tr>
+<tr><td colspan="6">Gosper's Glider Gun</td></tr>
+<tr><td colspan="6"><pre id="p7"  onclick="loadP(this)">
+
+                         X
+                       X X
+             XX      XX            XX
+            X   X    XX            XX
+ XX        X     X   XX
+ XX        X   X XX    X X
+           X     X       X
+            X   X
+             XX
+</pre></td></tr>
+</table>
+<span id="game"><i>You need JavaScript to see the simulation</i></span>
+</body>
+</html>
